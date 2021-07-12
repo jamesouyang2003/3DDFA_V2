@@ -4,8 +4,10 @@ __author__ = 'cleardusk'
 
 import argparse
 import imageio
+import numpy as np
 from tqdm import tqdm
 import yaml
+import csv
 
 from FaceBoxes import FaceBoxes
 from TDDFA import TDDFA
@@ -39,8 +41,17 @@ def main(args):
 	fps = reader.get_meta_data()['fps']
 
 	suffix = get_suffix(args.video_fp)
-	video_wfp = f'examples/results/videos/{fn.replace(suffix, "")}_pose.mp4'
+	video_wfp = f'test-videos/{fn.replace(suffix, "")}_pose.mp4'
 	writer = imageio.get_writer(video_wfp, fps=fps)
+
+	# Get sensor data
+	sensor_data = []
+	if args.sensor_data != "":
+		with open(args.sensor_data, 'r') as sensor_file:
+			sensor_reader = csv.reader(sensor_file)
+			for row in sensor_reader:
+				# sensor_data.append(np.array(row)[0:9].reshape(3, 3).astype(float)) # for rotation matrix instead of 3 axes
+				sensor_data.append(np.array(row).astype(float))
 
 	# run
 	pre_ver = None
@@ -71,14 +82,12 @@ def main(args):
 
 		pre_ver = ver  # for tracking
 
-		res = viz_pose(frame_bgr.copy(), param_lst, [ver], print_angle=False)
-
-		# if args.opt == '2d_sparse':
-		# 	res = cv_draw_landmark(frame_bgr, ver)
-		# elif args.opt == '3d':
-		# 	res = render(frame_bgr, [ver], tddfa.tri)
-		# else:
-		# 	raise ValueError(f'Unknown opt {args.opt}')
+		if args.sensor_data == "":
+			res = viz_pose(frame_bgr.copy(), param_lst, [ver], print_angle=False)
+		elif i < len(sensor_data):
+			res = viz_pose(frame_bgr.copy(), param_lst, [ver], print_angle=False, rotation=sensor_data[i])
+		else:
+			res = frame_bgr.copy()
 
 		writer.append_data(res[..., ::-1])  # BGR->RGB
 
@@ -90,6 +99,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='The demo of video of 3DDFA_V2')
 	parser.add_argument('-c', '--config', type=str, default='configs/mb1_120x120.yml')
 	parser.add_argument('-f', '--video_fp', type=str)
+	parser.add_argument('-d', '--sensor_data', type=str, default="")
 	parser.add_argument('-m', '--mode', default='cpu', type=str, help='gpu or cpu mode')
 	parser.add_argument('--onnx', action='store_true', default=False)
 
